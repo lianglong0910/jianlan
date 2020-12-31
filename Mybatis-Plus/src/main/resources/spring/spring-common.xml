@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:task="http://www.springframework.org/schema/task"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans.xsd
+	http://www.springframework.org/schema/context
+	http://www.springframework.org/schema/context/spring-context.xsd
+	http://www.springframework.org/schema/aop
+	http://www.springframework.org/schema/aop/spring-aop.xsd
+	http://www.springframework.org/schema/tx
+	http://www.springframework.org/schema/tx/spring-tx.xsd
+    http://www.springframework.org/schema/task
+    http://www.springframework.org/schema/task/spring-task-4.1.xsd">
+
+
+    <context:component-scan base-package="com.project.crm">
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+    </context:component-scan>
+
+    <!--配置数据库相关参数properties的属性：${url} -->
+    <context:property-placeholder location="classpath:properties/jdbc.properties"/>
+
+    <!-- 数据库连接池 -->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" destroy-method="close">
+        <property name="url" value="${jdbc.url}" />
+        <property name="username" value="${jdbc.username}" />
+        <property name="password" value="${jdbc.password}" />
+        <property name="driverClassName" value="${jdbc.driver}" />
+        <property name="maxActive" value="10" />
+        <property name="minIdle" value="5" />
+    </bean>
+
+    <!-- 配置mybatis-plus的sqlSessionFactory -->
+    <bean id="sqlSessionFactory" class="com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource" />
+        <!-- 控制台输出sql语句 -->
+        <property name="configLocation" value="classpath:mybatis-configuration.xml"/>
+        <property name="typeAliasesPackage" value="com.project.crm.model"/>
+        <!-- 配置插件 -->
+        <property name="plugins">
+            <list>
+                <!-- 分页插件 -->
+                <bean class="com.baomidou.mybatisplus.plugins.PaginationInterceptor"/>
+                <!-- 输出每条SQL语句及其执行时间，生产环境不建议使用该插件 -->
+                <bean class="com.baomidou.mybatisplus.plugins.PerformanceInterceptor">
+                    <property name="format" value="true"/><!-- 格式化SQL语句 -->
+                    <property name="maxTime" value="1000"/><!-- sql执行时间超过value值就会停止执行，单位是毫秒 -->
+                </bean>
+                <!-- 对全表的删除或更新操作，就会终止该操作 -->
+                <bean class="com.baomidou.mybatisplus.plugins.SqlExplainInterceptor">
+                    <property name="stopProceed" value="true"/>
+                </bean>
+            </list>
+        </property>
+        <!-- 注入全局配置 -->
+        <property name="globalConfig" ref="globalConfiguration"/>
+        <!-- 导入.xml文件路径 -->
+<!--        <property name="mapperLocations" value="classpath:mapper/*Mapper.xml"/>-->
+    </bean>
+
+
+    <bean id="mapperScanner" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.project.crm.mapper"/>
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+    </bean>
+
+    <!-- mybatisplus的全局策略配置 -->
+    <bean id="globalConfiguration" class="com.baomidou.mybatisplus.entity.GlobalConfiguration">
+        <!-- 2.3版本后，驼峰命名默认值就是true，所以可不配置 -->
+        <property name="dbColumnUnderline" value="true"/>
+        <!-- 全局主键自增策略，0表示auto -->
+        <property name="idType" value="0"/>
+        <!-- 全局表前缀配置 -->
+        <property name="tablePrefix" value="ts_"/>
+        <!-- 注入自定义全局操作 -->
+<!--        <property name="sqlInjector" ref="mySqlInjector"/>-->
+        <!-- 注入逻辑删除，先要把自定义的注释掉 -->
+        <property name="sqlInjector" ref="logicSqlInjector"/>
+        <!-- 注入逻辑删除值 -->
+        <property name="logicNotDeleteValue" value="1"/><!-- 1是未删除状态 -->
+        <property name="logicDeleteValue" value="2"/><!-- 2是删除状态 -->
+        <!-- 注入公共字段填充处理器 -->
+        <property name="metaObjectHandler" ref="myMetaObjectHandler"/>
+    </bean>
+
+    <!-- 自定义注入器 -->
+    <bean id="mySqlInjector" class="com.project.crm.model.MySqlInjector"/>
+
+    <!-- 逻辑删除 -->
+    <bean id="logicSqlInjector" class="com.baomidou.mybatisplus.mapper.LogicSqlInjector"/>
+
+    <!-- 公共字段填充处理器 -->
+    <bean id="myMetaObjectHandler" class="com.project.crm.model.MyMetaObjectHandler"/>
+
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver" />
+
+    <!-- 配置Spring的声明式事务管理 -->
+    <!-- 配置事务管理器 -->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <!-- 配置支持注解事务 -->
+    <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>
+
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <tx:method name="get*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="select*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="update*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="insert*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="add*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="delete*" read-only="true" propagation="SUPPORTS" rollback-for="java.lang.Exception"/>
+            <tx:method name="*" propagation="REQUIRED" rollback-for="java.lang.Exception"/>
+        </tx:attributes>
+    </tx:advice>
+
+</beans>
